@@ -6,11 +6,168 @@
     <title>Gray 作品集</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; overflow: hidden; }
-        iframe { width: 100%; height: 100%; border: none; }
+        body { 
+            width: 100vw; 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column;
+            background: #1a1a2e;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        #title {
+            color: #4FACFE;
+            font-size: 18px;
+            font-weight: 600;
+            padding: 16px 24px;
+            background: #111;
+            border-bottom: 1px solid #222;
+            letter-spacing: 0.1em;
+            flex-shrink: 0;
+        }
+        #canvas-container {
+            flex: 1;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            background: #1a1a2e;
+        }
+        canvas {
+            max-width: 100%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px 20px;
+            border-radius: 30px;
+            border: 1px solid #333;
+        }
+        #controls button {
+            background: #4FACFE;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        #controls button:hover { background: #3d8de0; }
+        #controls span {
+            color: #888;
+            line-height: 36px;
+            font-size: 14px;
+        }
+        #loading {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #1a1a2e;
+            color: #4FACFE;
+            font-size: 18px;
+            z-index: 100;
+        }
     </style>
 </head>
 <body>
-    <iframe src="portfolio.pdf"></iframe>
+
+<div id="loading">加载中...</div>
+
+<div id="title">Gray 作品集</div>
+
+<div id="canvas-container">
+    <canvas id="pdf-canvas"></canvas>
+</div>
+
+<div id="controls" style="display:none">
+    <button onclick="prevPage()">上一页</button>
+    <span id="page-info">1 / 1</span>
+    <button onclick="nextPage()">下一页</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    let pdfDoc = null;
+    let pageNum = 1;
+    let pageRendering = false;
+    let pageNumPending = null;
+    let scale = window.devicePixelRatio || 1.5;
+
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+    const pageInfo = document.getElementById('page-info');
+    const controls = document.getElementById('controls');
+    const loading = document.getElementById('loading');
+
+    pdfjsLib.getDocument('portfolio.pdf').promise.then(function(pdf) {
+        pdfDoc = pdf;
+        pageInfo.textContent = '1 / ' + pdf.numPages;
+        controls.style.display = 'flex';
+        loading.style.display = 'none';
+        renderPage(1);
+    }).catch(function(error) {
+        loading.textContent = '加载失败: ' + error.message;
+    });
+
+    function renderPage(num) {
+        pageRendering = true;
+        pdfDoc.getPage(num).then(function(page) {
+            const viewport = page.getViewport({ scale: window.innerWidth / page.getViewport({scale: 1}).width * 0.9 });
+            canvas.height = viewport.height * scale;
+            canvas.width = viewport.width * scale;
+            canvas.style.width = viewport.width + 'px';
+            canvas.style.height = viewport.height + 'px';
+
+            const renderContext = {
+                canvasContext: ctx,
+                viewport: viewport,
+                transform: [scale, 0, 0, scale, 0, 0]
+            };
+            page.render(renderContext).promise.then(function() {
+                pageRendering = false;
+                if (pageNumPending !== null) {
+                    renderPage(pageNumPending);
+                    pageNumPending = null;
+                }
+            });
+        });
+        pageInfo.textContent = num + ' / ' + pdfDoc.numPages;
+        pageNum = num;
+    }
+
+    function queueRenderPage(num) {
+        if (pageRendering) {
+            pageNumPending = num;
+        } else {
+            renderPage(num);
+        }
+    }
+
+    function prevPage() {
+        if (pageNum <= 1) return;
+        queueRenderPage(pageNum - 1);
+    }
+
+    function nextPage() {
+        if (pageNum >= pdfDoc.numPages) return;
+        queueRenderPage(pageNum + 1);
+    }
+
+    // 键盘翻页
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevPage();
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextPage();
+    });
+</script>
 </body>
 </html>
